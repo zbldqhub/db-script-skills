@@ -65,7 +65,7 @@ python scripts/generate_db_scripts.py \
 - `--schema`：目标 schema（默认 `zgis`）
 - `--sys`：子系统编码
 - `--major`：主类型码
-- `--with-config`：（可选）同时生成 `09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql`
+- `--with-config`：已弃用，保留该参数仅用于兼容性。`09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql` 现在默认随全量脚本一起生成。
 
 ---
 

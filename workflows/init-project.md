@@ -12,8 +12,7 @@
    - 多系统：`01-Application/<子系统名>/` 下分别生成脚本文件。需要列出各子系统的**名称**和对应的 **sys 码**
 3. **数据库连接 URL** 和 **schema 名**（默认 `zgis`）
 4. 需要按哪些 `major` 生成脚本？（如果用户不清楚，可传空，默认生成 `cx_entity.major > 0` 的所有表）
-5. 是否需要同时生成 `09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql`？
-   - **默认不生成**。只有用户明确说"要系统配置脚本"时才加 `--with-config`
+5. `generate_db_scripts.py` 默认会生成 `01-table.sql`（含视图）~ `11-cx_plugin.sql` 全套脚本。若数据库中无对应数据，某些文件可能为空或不存在。
 
 ## 执行步骤
 
@@ -56,7 +55,7 @@ python db-script-generator/scripts/generate_db_scripts.py \
   --major 41
 ```
 
-如需同时生成 `09/10/11` 系统配置脚本，追加 `--with-config`。
+`generate_db_scripts.py` 默认已包含 `09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql` 的生成。
 
 ### 步骤3：生成函数/存储过程、触发器（可选）
 

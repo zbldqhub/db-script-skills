@@ -675,86 +675,84 @@ def main():
             fldvalue_lines.append(f"INSERT INTO cx_fldvalue ({', '.join(fldvalue_cols)}) VALUES ({', '.join(vals)});")
     files_map['03-cx_fldvalue.sql'] = '\n'.join(fldvalue_lines) + '\n'
 
-    if args.with_config:
-        # 09-data.sql (system init data)
-        data_tables = ['cx_sysdef', 'cx_syscfg', 'cx_layer', 'cx_maplayer', 'cx_mapservice', 'cx_sqlexp', 'cx_sqlpro', 'cx_userhabit']
-        data_lines = []
-        # Build 09-data.sql inline here
-        conn4 = psycopg2.connect(db_url)
-        cur4 = conn4.cursor()
-        for dt in data_tables:
-            cur4.execute("SELECT 1 FROM information_schema.tables WHERE table_name = %s", (dt,))
-            if not cur4.fetchone():
-                continue
-            cols = get_columns(cur4, dt)
-            cur4.execute(f"SELECT * FROM {dt} ORDER BY 1")
-            rows = cur4.fetchall()
-            if not rows:
-                continue
-            data_lines.append(f"/* {dt} */")
-            data_lines.append(f"DELETE FROM {dt};")
-            data_lines.append("")
-            for row in rows:
+    # 09-data.sql (system init data)
+    data_tables = ['cx_sysdef', 'cx_syscfg', 'cx_layer', 'cx_maplayer', 'cx_mapservice', 'cx_sqlexp', 'cx_sqlpro', 'cx_userhabit']
+    data_lines = []
+    conn4 = psycopg2.connect(db_url)
+    cur4 = conn4.cursor()
+    for dt in data_tables:
+        cur4.execute("SELECT 1 FROM information_schema.tables WHERE table_name = %s", (dt,))
+        if not cur4.fetchone():
+            continue
+        cols = get_columns(cur4, dt)
+        cur4.execute(f"SELECT * FROM {dt} ORDER BY 1")
+        rows = cur4.fetchall()
+        if not rows:
+            continue
+        data_lines.append(f"/* {dt} */")
+        data_lines.append(f"DELETE FROM {dt};")
+        data_lines.append("")
+        for row in rows:
+            vals = [quote_sql(v) for v in row]
+            data_lines.append(f"INSERT INTO {dt} ({', '.join(cols)}) VALUES ({', '.join(vals)});")
+        data_lines.append("")
+        data_lines.append("")
+    cur4.close()
+    conn4.close()
+    if data_lines:
+        files_map['09-data.sql'] = '\n'.join(data_lines) + '\n'
+
+    # 10-cx_func.sql
+    conn5 = psycopg2.connect(db_url)
+    cur5 = conn5.cursor()
+    cur5.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'cx_func'")
+    if cur5.fetchone():
+        cur5.execute("SELECT * FROM cx_func ORDER BY sys, disporder")
+        func_rows = cur5.fetchall()
+        if func_rows:
+            func_cols = get_columns(cur5, 'cx_func')
+            func_lines = ["-- ============================================================", "-- 删除功能定义", "-- ============================================================"]
+            sys_set = sorted(set(r[func_cols.index('sys')] if 'sys' in func_cols else r[1] for r in func_rows))
+            for s in sys_set:
+                func_lines.append(f"DELETE FROM cx_func WHERE sys='{s}';")
+            func_lines.append("")
+            func_lines.append("-- ============================================================")
+            func_lines.append("-- 创建功能定义")
+            func_lines.append("-- ============================================================")
+            func_lines.append("")
+            for row in func_rows:
                 vals = [quote_sql(v) for v in row]
-                data_lines.append(f"INSERT INTO {dt} ({', '.join(cols)}) VALUES ({', '.join(vals)});")
-            data_lines.append("")
-            data_lines.append("")
-        cur4.close()
-        conn4.close()
-        if data_lines:
-            files_map['09-data.sql'] = '\n'.join(data_lines) + '\n'
-
-        # 10-cx_func.sql
-        conn5 = psycopg2.connect(db_url)
-        cur5 = conn5.cursor()
-        cur5.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'cx_func'")
-        if cur5.fetchone():
-            cur5.execute("SELECT * FROM cx_func ORDER BY sys, disporder")
-            func_rows = cur5.fetchall()
-            if func_rows:
-                func_cols = get_columns(cur5, 'cx_func')
-                func_lines = ["-- ============================================================", "-- 删除功能定义", "-- ============================================================"]
-                sys_set = sorted(set(r[func_cols.index('sys')] if 'sys' in func_cols else r[1] for r in func_rows))
-                for s in sys_set:
-                    func_lines.append(f"DELETE FROM cx_func WHERE sys='{s}';")
+                func_lines.append(f"INSERT INTO cx_func({', '.join(func_cols)}) VALUES ({', '.join(vals)});")
                 func_lines.append("")
-                func_lines.append("-- ============================================================")
-                func_lines.append("-- 创建功能定义")
-                func_lines.append("-- ============================================================")
-                func_lines.append("")
-                for row in func_rows:
-                    vals = [quote_sql(v) for v in row]
-                    func_lines.append(f"INSERT INTO cx_func({', '.join(func_cols)}) VALUES ({', '.join(vals)});")
-                    func_lines.append("")
-                files_map['10-cx_func.sql'] = '\n'.join(func_lines) + '\n'
-        cur5.close()
-        conn5.close()
+            files_map['10-cx_func.sql'] = '\n'.join(func_lines) + '\n'
+    cur5.close()
+    conn5.close()
 
-        # 11-cx_plugin.sql
-        conn6 = psycopg2.connect(db_url)
-        cur6 = conn6.cursor()
-        cur6.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'cx_plugin'")
-        if cur6.fetchone():
-            cur6.execute("SELECT * FROM cx_plugin ORDER BY sys, cata, name")
-            plugin_rows = cur6.fetchall()
-            if plugin_rows:
-                plugin_cols = get_columns(cur6, 'cx_plugin')
-                plugin_lines = ["-- ============================================================", "-- 删除插件定义", "-- ============================================================"]
-                sys_set = sorted(set(r[plugin_cols.index('sys')] if 'sys' in plugin_cols else r[1] for r in plugin_rows))
-                for s in sys_set:
-                    plugin_lines.append(f"DELETE FROM cx_plugin WHERE sys='{s}';")
+    # 11-cx_plugin.sql
+    conn6 = psycopg2.connect(db_url)
+    cur6 = conn6.cursor()
+    cur6.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'cx_plugin'")
+    if cur6.fetchone():
+        cur6.execute("SELECT * FROM cx_plugin ORDER BY sys, cata, name")
+        plugin_rows = cur6.fetchall()
+        if plugin_rows:
+            plugin_cols = get_columns(cur6, 'cx_plugin')
+            plugin_lines = ["-- ============================================================", "-- 删除插件定义", "-- ============================================================"]
+            sys_set = sorted(set(r[plugin_cols.index('sys')] if 'sys' in plugin_cols else r[1] for r in plugin_rows))
+            for s in sys_set:
+                plugin_lines.append(f"DELETE FROM cx_plugin WHERE sys='{s}';")
+            plugin_lines.append("")
+            plugin_lines.append("-- ============================================================")
+            plugin_lines.append("-- 创建插件定义")
+            plugin_lines.append("-- ============================================================")
+            plugin_lines.append("")
+            for row in plugin_rows:
+                vals = [quote_sql(v) for v in row]
+                plugin_lines.append(f"INSERT INTO cx_plugin({', '.join(plugin_cols)}) VALUES ({', '.join(vals)});")
                 plugin_lines.append("")
-                plugin_lines.append("-- ============================================================")
-                plugin_lines.append("-- 创建插件定义")
-                plugin_lines.append("-- ============================================================")
-                plugin_lines.append("")
-                for row in plugin_rows:
-                    vals = [quote_sql(v) for v in row]
-                    plugin_lines.append(f"INSERT INTO cx_plugin({', '.join(plugin_cols)}) VALUES ({', '.join(vals)});")
-                    plugin_lines.append("")
-                files_map['11-cx_plugin.sql'] = '\n'.join(plugin_lines) + '\n'
-        cur6.close()
-        conn6.close()
+            files_map['11-cx_plugin.sql'] = '\n'.join(plugin_lines) + '\n'
+    cur6.close()
+    conn6.close()
 
     # Write all files
     for fname, content in files_map.items():

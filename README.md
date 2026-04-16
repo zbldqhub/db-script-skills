@@ -71,7 +71,7 @@ db-script-skills/
 python db-script-generator/scripts/init_project_dirs.py \
   --project-root "./my-project" --layout single
 
-# 2. 生成全量脚本（含视图）
+# 2. 生成全量脚本（含视图、09-data、10-cx_func、11-cx_plugin）
 python db-script-generator/scripts/generate_db_scripts.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
   --output-dir "./my-project/01-Application" \
