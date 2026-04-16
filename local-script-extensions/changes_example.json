@@ -1,0 +1,66 @@
+{
+  "project_root": "..",
+  "system": "19-热线服务系统",
+  "target_upgrade": "02-Upgrade/update2026.sql",
+  "author": "你的名字",
+  "comment": "修正：删除 hl_notice 错误添加的字段，在 rn_public_msg 上增加公告状态、审核状态、审核人、审核时间字段",
+  "changes": [
+    {
+      "action": "drop_columns",
+      "table": "hl_notice",
+      "columns": ["ggzt", "shzt", "shr", "shsj"]
+    },
+    {
+      "action": "add_columns",
+      "table": "rn_public_msg",
+      "columns": [
+        {"name": "ggzt", "definition": "integer NOT NULL DEFAULT 0", "comment": "公告状态"},
+        {"name": "shzt", "definition": "integer NOT NULL DEFAULT 0", "comment": "审核状态"},
+        {"name": "shr", "definition": "varchar(32)", "comment": "审核人"},
+        {"name": "shsj", "definition": "timestamp", "comment": "审核时间"}
+      ]
+    },
+    {
+      "action": "remove_fld",
+      "table": "hl_notice",
+      "columns": ["ggzt", "shzt", "shr", "shsj"]
+    },
+    {
+      "action": "remove_fldvalue",
+      "table": "hl_notice",
+      "columns": ["ggzt", "shzt"]
+    },
+    {
+      "action": "add_fld",
+      "table": "rn_public_msg",
+      "sys": "19",
+      "flds": [
+        {"colname": "ggzt", "namec": "公告状态", "disptype": 2, "isnum": 1, "disporder": 9, "newedit": 1, "editable": 1, "nullable": 0, "qrylevel": 1},
+        {"colname": "shzt", "namec": "审核状态", "disptype": 2, "isnum": 1, "disporder": 10, "newedit": 1, "editable": 1, "nullable": 0, "qrylevel": 1},
+        {"colname": "shr", "namec": "审核人", "disptype": 1, "isnum": 0, "disporder": 11, "newedit": 1, "editable": 1, "nullable": 1, "qrylevel": 1},
+        {"colname": "shsj", "namec": "审核时间", "disptype": 3, "isnum": 0, "disporder": 12, "newedit": 1, "editable": 1, "nullable": 1, "qrylevel": 1}
+      ]
+    },
+    {
+      "action": "add_fldvalue",
+      "table": "rn_public_msg",
+      "sys": "19",
+      "values": [
+        {
+          "colname": "ggzt",
+          "items": [
+            {"disporder": 1, "dbvalue": "0", "dispc": "停止"},
+            {"disporder": 2, "dbvalue": "1", "dispc": "启用"}
+          ]
+        },
+        {
+          "colname": "shzt",
+          "items": [
+            {"disporder": 1, "dbvalue": "0", "dispc": "不通过"},
+            {"disporder": 2, "dbvalue": "1", "dispc": "通过"}
+          ]
+        }
+      ]
+    }
+  ]
+}
