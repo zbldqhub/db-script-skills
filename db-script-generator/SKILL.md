@@ -5,10 +5,11 @@ description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成
 
 # 数据库脚本生成器 (DB Script Generator V1.2)
 
-本 Skill 严格遵循《数据库脚本规范 V1.2》执行所有操作，按使用场景分为两类：
+本 Skill 严格遵循《数据库脚本规范 V1.2》执行所有操作，按使用场景分为三类：
 
 1. **场景1：从已有数据库初始化项目** —— 已有 DB，生成标准目录和全量脚本。
 2. **场景2：表结构变更与新建表** —— 用户提供需求，生成增量脚本并同步更新全量脚本。
+3. **场景3：格式化对齐已有 SQL 脚本** —— 直接在原文件上对齐 INSERT 语句。
 
 ---
 
@@ -23,7 +24,7 @@ description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成
 3. 数据库连接 URL、schema 名（默认 `zgis`）。
 4. 需要按哪些 `major` 生成脚本？（如果用户不清楚，可传空，默认生成 `cx_entity.major > 0` 的所有表）
 5. 是否需要同时生成 `09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql`？
-   > **默认不生成**。只有用户明确说“要系统配置脚本”时才加 `--with-config`。
+   > **默认不生成**。只有用户明确说"要系统配置脚本"时才加 `--with-config`。
 
 ### 目录结构示例
 
@@ -151,7 +152,7 @@ python scripts/run_all.py --config config.json
 
 ## 场景2：表结构变更与新建表
 
-> **与场景3的本质区别**：场景2是“生成新脚本”，必须知道增量和全量脚本的输出位置；场景3是“格式化已有脚本”，直接在原文件上修改。
+> **与场景3的本质区别**：场景2是"生成新脚本"，必须知道增量和全量脚本的输出位置；场景3是"格式化已有脚本"，直接在原文件上修改。
 
 ### 你需要询问用户的问题
 
@@ -295,68 +296,9 @@ python scripts/generate_db_scripts.py \
 
 ---
 
-## 核心规则
-
-### 规则1：`cx_fld` 永远不要配置 `id` 字段
-
-- `id` 由数据库自增主键管理，不允许出现在 `cx_fld` 配置中。
-- 所有生成脚本、修复脚本、增量变更脚本、数据库同步脚本必须强制排除 `id`。
-- 该规则来源于全局 `~/.agents/AGENTS.md`，所有项目通用。
-
-### 规则2：所有表必须有主键，主键名称为 `id`，默认自增
-
-- **每个表必须包含 `id` 字段作为主键**。
-- **非特殊指定时，`id` 设置为自增**：`id serial primary key`。
-- **建表语句中**，`id` 的主键约束直接写在字段定义后面：`id serial primary key`。
-- **禁止**在 `CREATE TABLE` 的字段列表末尾再写一行 `CONSTRAINT xxx PRIMARY KEY (id)`。
-
----
-
-## 数据库配置一致性检查
-
-```bash
-python scripts/check_db_consistency.py \
-  --db-url "postgresql://..." \
-  --schema zgis \
-  --output report.sql
-```
-
-检查项：
-- `cx_fld` 中配置了被禁止的 `id` 字段
-- 实际表存在但 `cx_fld` 中缺失的字段（排除 `id`）
-- `cx_fld` 中存在但实际表不存在的 orphan 字段
-- 非 `act%` 表中 `colname` 未小写的记录
-- `cx_entity` 中表名在实际 schema 中不存在
-
----
-
-## 数据库配置自动修复
-
-```bash
-# 预览修复 SQL（默认 dry-run）
-python scripts/fix_cx_fld.py \
-  --db-url "postgresql://..." \
-  --schema zgis \
-  --output fix.sql
-
-# 真正执行修复
-python scripts/fix_cx_fld.py \
-  --db-url "postgresql://..." \
-  --schema zgis \
-  --apply
-```
-
-自动修复内容：
-- 将非 `act%` 表的 `colname` 统一改为小写
-- **删除 `cx_fld` 中所有 `id` 的违规配置**
-- 删除 orphan `cx_fld` 记录
-- 同步 `cx_fld.sys` 与 `cx_entity.sys`
-
----
-
 ## 场景3：格式化对齐已有 SQL 脚本
 
-> **与场景2的本质区别**：场景3是“修改已有脚本”，直接在原文件上对齐；**不需要问增量/全量脚本路径**，只需要知道文件或目录位置即可。
+> **与场景2的本质区别**：场景3是"修改已有脚本"，直接在原文件上对齐；**不需要问增量/全量脚本路径**，只需要知道文件或目录位置即可。
 
 如果用户给了一个或一批已写好的 SQL 脚本，要求对 `INSERT INTO ... VALUES (...)` 语句做中文显示宽度对齐，可以直接调用对齐脚本。
 
@@ -382,6 +324,23 @@ for %f in ("D:\project\01-Application\*.sql") do python scripts/align_sql_values
 > - **默认处理所有 `cx_` 前缀的配置表**（如 `cx_fld`、`cx_fldvalue`、`cx_entity`、`cx_func`、`cx_funcgrp`、`cx_plugin` 等）。
 > - 如需额外指定其他表，可使用 `--tables` 参数：`--tables "teacher,student"`。
 > - **排除项**：测试数据表、日志表、大量业务数据表的 INSERT 不建议用此脚本对齐。
+
+---
+
+## 核心规则
+
+### 规则1：`cx_fld` 永远不要配置 `id` 字段
+
+- `id` 由数据库自增主键管理，不允许出现在 `cx_fld` 配置中。
+- 所有生成脚本、修复脚本、增量变更脚本、数据库同步脚本必须强制排除 `id`。
+- 该规则来源于全局 `~/.agents/AGENTS.md`，所有项目通用。
+
+### 规则2：所有表必须有主键，主键名称为 `id`，默认自增
+
+- **每个表必须包含 `id` 字段作为主键**。
+- **非特殊指定时，`id` 设置为自增**：`id serial primary key`。
+- **建表语句中**，`id` 的主键约束直接写在字段定义后面：`id serial primary key`。
+- **禁止**在 `CREATE TABLE` 的字段列表末尾再写一行 `CONSTRAINT xxx PRIMARY KEY (id)`。
 
 ---
 
