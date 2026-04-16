@@ -93,13 +93,19 @@ python db-script-generator/scripts/generate_triggers.py \
 
 参见 [`workflows/schema-change.md`](workflows/schema-change.md)。
 
-核心调用链：
+**默认优先本地无库修改：**
+
+```bash
+python local-script-extensions/update_db_scripts.py --config changes.json
+```
+
+该脚本会自动修改 `01-table.sql`、`02-cx_fld.sql`、`03-cx_fldvalue.sql`、`04-cx_entity.sql`，并生成增量脚本。
+
+**用户明确要求同步到数据库时，才走连库路径：**
 1. `sync_db_from_changes.py`（dry-run → apply）
 2. `apply_schema_changes.py`（生成增量脚本）
 3. `generate_db_scripts.py`（重新生成全量脚本）
 4. `align_sql_values.py`（格式化对齐）
-
-> 如果不想连接数据库，直接使用 `local-script-extensions/update_db_scripts.py`。
 
 ### 场景3：生成设计文档
 

@@ -3,7 +3,7 @@
 """
 本地数据库脚本同步工具
 
-功能：根据 JSON 变更配置，同步更新全量脚本（01-table / 02-cx_fld / 03-cx_fldvalue）
+功能：根据 JSON 变更配置，同步更新全量脚本（01-table / 02-cx_fld / 03-cx_fldvalue / 04-cx_entity）
       并在指定增量脚本末尾追加变更块。全程不连接数据库。
 
 用法：
@@ -14,7 +14,6 @@ import argparse
 import json
 import os
 import re
-import sys
 from datetime import datetime
 
 # -----------------------------------------------------------
@@ -30,6 +29,11 @@ DEFAULT_FLD_TEMPLATE = (
 DEFAULT_FLDVALUE_TEMPLATE = (
     "INSERT INTO cx_fldvalue (sys, tabname, colname, disporder, dbvalue, dispc, disp) "
     "VALUES ('{sys}', '{tabname}', '{colname}', {disporder}, '{dbvalue}', '{dispc}', null);"
+)
+
+DEFAULT_ENTITY_TEMPLATE = (
+    "INSERT INTO cx_entity (name, namec, type, major, minor, domains, glmaj, glmin, log) "
+    "VALUES ('{name}', '{namec}', '{type}', '{major}', '{minor}', '{domains}', '{glmaj}', '{glmin}', '{log}');"
 )
 
 # -----------------------------------------------------------
@@ -58,7 +62,9 @@ def modify_table_sql(content, changes):
         action = ch['action']
         table = ch['table']
 
-        if action == 'add_columns':
+        if action == 'create_table':
+            result = _table_create_table(result, table, ch.get('columns', []))
+        elif action == 'add_columns':
             result = _table_add_columns(result, table, ch['columns'])
         elif action == 'drop_columns':
             result = _table_drop_columns(result, table, ch['columns'])
@@ -96,6 +102,40 @@ def _find_table_block(lines, table):
             break
 
     return start_idx, end_idx, base_indent
+
+def _table_create_table(lines, table, columns):
+    """在 01-table.sql 末尾追加新的 CREATE TABLE"""
+    indent = '    '
+    col_lines = []
+    comment_lines = []
+    for col in columns:
+        name = col['name']
+        definition = col['definition']
+        comment = col.get('comment', '')
+        col_lines.append(f"{indent}{name:<8} {definition}")
+        if comment:
+            comment_lines.append(f"comment on column {table}.{name} is '{comment}';")
+
+    # 最后一行不加逗号
+    if col_lines:
+        col_lines[-1] = col_lines[-1].rstrip().rstrip(',')
+
+    block_lines = [
+        "",
+        f"-- {table}",
+        f"create table {table}",
+        "(",
+    ]
+    block_lines.extend(col_lines)
+    block_lines.append(");")
+    if comment_lines:
+        block_lines.append("")
+        block_lines.extend(comment_lines)
+    block_lines.append("")
+    block_lines.append("")
+    block_lines.append("")
+
+    return lines + block_lines
 
 def _table_add_columns(lines, table, columns):
     start_idx, end_idx, indent = _find_table_block(lines, table)
@@ -176,6 +216,41 @@ def _table_drop_columns(lines, table, columns):
             new_lines[new_end - 1] = last_field_line.rstrip()[:-1]
 
     return new_lines
+
+# -----------------------------------------------------------
+# 04-cx_entity.sql 处理
+# -----------------------------------------------------------
+def modify_entity_sql(content, changes):
+    lines = content.splitlines()
+    added_majors = set()
+    for ch in changes:
+        if ch['action'] == 'create_table':
+            tabname = ch['table']
+            major = str(ch.get('major', '0'))
+            added_majors.add(major)
+            namec = ch.get('namec', tabname)
+            minor = str(ch.get('minor', '1'))
+            defaults = {
+                'name': tabname,
+                'namec': namec,
+                'type': ch.get('type', '1'),
+                'major': major,
+                'minor': minor,
+                'domains': ch.get('domains', '1'),
+                'glmaj': ch.get('glmaj', '0'),
+                'glmin': ch.get('glmin', '0'),
+                'log': ch.get('log', '0'),
+            }
+            insert_line = DEFAULT_ENTITY_TEMPLATE.format(**defaults)
+            lines.append(insert_line)
+    if added_majors:
+        # 确保每个新增的 major 前面都有 delete 语句
+        # 简单处理：如果 delete 不存在，在文件开头补
+        for major in sorted(added_majors):
+            found = any(re.match(rf"^\s*delete\s+from\s+cx_entity\s+where\s+major\s*=\s*{re.escape(major)}", ln, re.IGNORECASE) for ln in lines)
+            if not found:
+                lines.insert(0, f"delete from cx_entity where major={major};")
+    return '\n'.join(lines)
 
 # -----------------------------------------------------------
 # 02-cx_fld.sql / 03-cx_fldvalue.sql 处理
@@ -288,9 +363,25 @@ def generate_upgrade_block(changes, author=None, comment=None):
     for ch in changes:
         action = ch['action']
         table = ch['table']
-        sys = ch.get('sys', '0')
 
-        if action == 'drop_columns':
+        if action == 'create_table':
+            lines.append(f"-- 创建 {table}")
+            col_defs = []
+            comment_lines = []
+            for col in ch.get('columns', []):
+                col_defs.append(f"    {col['name']} {col['definition']}")
+                if col.get('comment'):
+                    comment_lines.append(f"comment on column {table}.{col['name']} is '{col['comment']}';")
+            if col_defs:
+                col_defs[-1] = col_defs[-1].rstrip().rstrip(',')
+            lines.append(f"CREATE TABLE {table} (")
+            lines.append(",\n".join(col_defs))
+            lines.append(");")
+            if comment_lines:
+                lines.extend(comment_lines)
+            lines.append("")
+
+        elif action == 'drop_columns':
             cols = ch['columns']
             lines.append(f"-- 删除 {table} 的字段")
             for c in cols:
@@ -301,6 +392,8 @@ def generate_upgrade_block(changes, author=None, comment=None):
             lines.append(f"-- 在 {table} 上增加字段")
             for col in ch['columns']:
                 lines.append(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col['name']} {col['definition']};")
+                if col.get('comment'):
+                    lines.append(f"comment on column {table}.{col['name']} is '{col['comment']}';")
             lines.append("")
 
         elif action == 'remove_fld':
@@ -355,6 +448,7 @@ def main():
     table_sql_path = os.path.join(app_dir, '01-table.sql')
     fld_sql_path = os.path.join(app_dir, '02-cx_fld.sql')
     fldvalue_sql_path = os.path.join(app_dir, '03-cx_fldvalue.sql')
+    entity_sql_path = os.path.join(app_dir, '04-cx_entity.sql')
     upgrade_path = os.path.join(project_root, target_upgrade)
 
     # 1. 处理 01-table.sql
@@ -364,12 +458,19 @@ def main():
         write_file(table_sql_path, content)
         print(f"[OK] 已更新 {table_sql_path}")
     else:
-        print(f"[WARN] 未找到 {table_sql_path}")
+        # 如果文件不存在且包含 create_table，直接新建
+        if any(ch['action'] == 'create_table' for ch in changes):
+            content = ""
+            content = modify_table_sql(content, changes)
+            ensure_dir(os.path.dirname(table_sql_path))
+            write_file(table_sql_path, content)
+            print(f"[OK] 已新建 {table_sql_path}")
+        else:
+            print(f"[WARN] 未找到 {table_sql_path}")
 
     # 2. 处理 02-cx_fld.sql
     if os.path.exists(fld_sql_path):
         content = read_file(fld_sql_path)
-        # 按表聚合 fld 变更
         fld_changes_by_table = {}
         for ch in changes:
             if ch['action'] in ('add_fld', 'remove_fld'):
@@ -395,7 +496,18 @@ def main():
     else:
         print(f"[WARN] 未找到 {fldvalue_sql_path}")
 
-    # 4. 追加增量脚本
+    # 4. 处理 04-cx_entity.sql（create_table 时追加）
+    if any(ch['action'] == 'create_table' for ch in changes):
+        if os.path.exists(entity_sql_path):
+            content = read_file(entity_sql_path)
+        else:
+            content = ""
+        content = modify_entity_sql(content, changes)
+        ensure_dir(os.path.dirname(entity_sql_path))
+        write_file(entity_sql_path, content)
+        print(f"[OK] 已更新 {entity_sql_path}")
+
+    # 5. 追加增量脚本
     ensure_dir(os.path.dirname(upgrade_path))
     upgrade_block = generate_upgrade_block(changes, author, comment)
     with open(upgrade_path, 'a', encoding='utf-8') as f:

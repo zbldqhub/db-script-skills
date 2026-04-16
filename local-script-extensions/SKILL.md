@@ -1,6 +1,6 @@
 ---
 name: local-script-extensions
-description: 在不连接数据库的情况下，根据 JSON 变更配置直接修改本地全量 SQL 脚本（01-table / 02-cx_fld / 03-cx_fldvalue）并在指定增量脚本末尾追加变更块。Use when the user wants to modify local SQL scripts without database access, or when applying quick schema changes directly to existing full-installation and upgrade scripts.
+description: 在不连接数据库的情况下，根据 JSON 变更配置直接修改本地全量 SQL 脚本（01-table / 02-cx_fld / 03-cx_fldvalue / 04-cx_entity）并在指定增量脚本末尾追加变更块。支持 create_table、add_columns、drop_columns 等本地 DDL 操作。Use when the user wants to modify local SQL scripts without database access, or when applying quick schema changes (including creating new tables) directly to existing full-installation and upgrade scripts.
 ---
 
 # 本地无库脚本同步扩展
@@ -11,7 +11,7 @@ description: 在不连接数据库的情况下，根据 JSON 变更配置直接�
 
 | 脚本 | 用途 | 自由度 |
 |------|------|--------|
-| `update_db_scripts.py` | 读取 JSON 配置，同步更新本地 `01-table.sql`、`02-cx_fld.sql`、`03-cx_fldvalue.sql` 及增量脚本 | 低 |
+| `update_db_scripts.py` | 读取 JSON 配置，同步更新本地 `01-table.sql`、`02-cx_fld.sql`、`03-cx_fldvalue.sql`、`04-cx_entity.sql` 及增量脚本 | 低 |
 
 ---
 
@@ -36,6 +36,11 @@ python local-script-extensions/update_db_scripts.py --config changes.json
   "author": "你的名字",
   "comment": "修正：删除 hl_notice 错误添加的字段",
   "changes": [
+    {"action": "create_table", "table": "student", "namec": "学生表", "major": "90", "minor": "1",
+      "columns": [
+        {"name": "id", "definition": "serial primary key", "comment": "ID"},
+        {"name": "code", "definition": "varchar(32)", "comment": "编码"}
+      ]},
     {"action": "drop_columns", "table": "hl_notice", "columns": ["ggzt", "shzt"]},
     {"action": "add_columns", "table": "rn_public_msg", "columns": [
       {"name": "ggzt", "definition": "integer NOT NULL DEFAULT 0", "comment": "公告状态"}
@@ -70,6 +75,7 @@ python local-script-extensions/update_db_scripts.py --config changes.json
 
 | action | 作用 |
 |--------|------|
+| `create_table` | 在 `01-table.sql` 末尾追加新表定义；在 `04-cx_entity.sql` 追加实体记录；增量生成 `CREATE TABLE` |
 | `add_columns` | 在 `01-table.sql` 的目标表中添加字段及注释；增量生成 `ADD COLUMN` |
 | `drop_columns` | 在 `01-table.sql` 的目标表中删除字段及注释；增量生成 `DROP COLUMN` |
 | `add_fld` | 在 `02-cx_fld.sql` 中添加配置；增量生成 `delete + INSERT` |
