@@ -58,33 +58,29 @@ python db-script-generator/scripts/generate_db_scripts.py \
 
 如需同时生成 `09/10/11` 系统配置脚本，追加 `--with-config`。
 
-### 步骤3：生成视图、函数/存储过程、触发器（可选）
+### 步骤3：生成函数/存储过程、触发器（可选）
 
-如果数据库中存在这些对象，应一并生成：
+`generate_db_scripts.py` 在生成 `01-table.sql` 时已自动包含视图定义。
+
+如果数据库中存在函数/存储过程和触发器，应继续生成：
 
 ```bash
-# 生成视图
-python db-script-generator/scripts/generate_views.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "<project-root>/01-Application" \
-  --schema zgis
-
 # 生成函数和存储过程
 python db-script-generator/scripts/generate_procs.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "<project-root>/02-Procs" \
+  --output-dir "<project-root>/01-Application" \
   --schema zgis
 
 # 生成触发器（必须在函数生成之后执行）
 python db-script-generator/scripts/generate_triggers.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "<project-root>/02-Procs" \
+  --output-dir "<project-root>/01-Application" \
   --schema zgis
 ```
 
 ### 步骤4（可选）：格式化对齐
 
-对 `01-Application` 和 `02-Procs` 下的配置表 INSERT 进行对齐：
+对 `01-Application` 下的配置表 INSERT 进行对齐：
 
 ```bash
 # Windows PowerShell 示例
@@ -95,7 +91,5 @@ Get-ChildItem "<project-root>/01-Application/*.sql" | ForEach-Object {
 
 ## 输出结果
 
-- 单系统：
-  - `01-Application/` 下包含 `01-table.sql` ~ `06-views.sql`（及可选的 `09`~`11`）
-  - `02-Procs/` 下包含 `01-procs.sql`、`02-triggers.sql`
+- 单系统：`01-Application/` 下包含 `01-table.sql`（含视图）~ `11-cx_plugin.sql`
 - 多系统：`01-Application/<子系统名>/` 下分别包含上述文件

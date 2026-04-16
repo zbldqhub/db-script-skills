@@ -63,7 +63,7 @@ def main():
         lines.append("")
 
     os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(args.output_dir, '02-triggers.sql')
+    output_path = os.path.join(args.output_dir, '06-trigger.sql')
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
     print(f"Generated: {output_path} ({len(rows)} triggers)")

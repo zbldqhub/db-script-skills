@@ -26,7 +26,6 @@ db-script-skills/
 │       ├── align_sql_values.py
 │       ├── check_db_consistency.py
 │       ├── fix_cx_fld.py
-│       ├── generate_views.py
 │       ├── generate_procs.py
 │       ├── generate_triggers.py
 │       └── run_all.py
@@ -72,26 +71,21 @@ db-script-skills/
 python db-script-generator/scripts/init_project_dirs.py \
   --project-root "./my-project" --layout single
 
-# 2. 生成全量脚本
+# 2. 生成全量脚本（含视图）
 python db-script-generator/scripts/generate_db_scripts.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
   --output-dir "./my-project/01-Application" \
   --schema zgis --sys 0 --major 90
 
-# 3. 生成视图、函数/存储过程、触发器（可选）
-python db-script-generator/scripts/generate_views.py \
+# 3. 生成函数/存储过程、触发器（可选）
+python db-script-generator/scripts/generate_procs.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
   --output-dir "./my-project/01-Application" \
   --schema zgis
 
-python db-script-generator/scripts/generate_procs.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "./my-project/02-Procs" \
-  --schema zgis
-
 python db-script-generator/scripts/generate_triggers.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "./my-project/02-Procs" \
+  --output-dir "./my-project/01-Application" \
   --schema zgis
 ```
 
@@ -166,9 +160,8 @@ Get-ChildItem "./my-project/01-Application/*.sql" | ForEach-Object {
 | `align_sql_values.py` | 对 SQL INSERT 做中文宽度对齐 |
 | `check_db_consistency.py` | 数据库配置一致性检查 |
 | `fix_cx_fld.py` | 自动修复常见配置问题 |
-| `generate_views.py` | 从数据库生成视图脚本 |
-| `generate_procs.py` | 从数据库生成函数/存储过程脚本 |
-| `generate_triggers.py` | 从数据库生成触发器脚本 |
+| `generate_procs.py` | 从数据库生成函数/存储过程脚本 `07-functions.sql` |
+| `generate_triggers.py` | 从数据库生成触发器脚本 `06-trigger.sql` |
 | `init_project_dirs.py` | 初始化标准项目目录 |
 | `run_all.py` | 一键串行生成多个子系统全量脚本 |
 

@@ -520,6 +520,80 @@ def main():
     table_sql = build_table_sql(cur2, schema, table_list, entity_map, col_map, dict(pk_map), dict(uk_map), dict(fk_map))
     cur2.close()
     conn2.close()
+
+    # Append views to 01-table.sql per V1.2 spec
+    conn_views = psycopg2.connect(db_url)
+    cur_views = conn_views.cursor()
+    cur_views.execute("""
+        SELECT table_name, view_definition
+        FROM information_schema.views
+        WHERE table_schema = %s
+        ORDER BY table_name
+    """, (schema,))
+    view_map = {row[0]: row[1] for row in cur_views.fetchall()}
+
+    if view_map:
+        cur_views.execute("""
+            SELECT DISTINCT v.table_name, u.table_name AS dependency
+            FROM information_schema.view_table_usage u
+            JOIN information_schema.views v
+              ON u.view_name = v.table_name AND u.view_schema = v.table_schema
+            WHERE v.table_schema = %s AND u.table_schema = %s
+              AND u.table_name != v.table_name
+        """, (schema, schema))
+        all_deps = defaultdict(list)
+        for view_name, dep in cur_views.fetchall():
+            if dep in view_map:
+                all_deps[view_name].append(dep)
+
+        in_degree = {v: 0 for v in view_map}
+        adj = defaultdict(list)
+        for v in view_map:
+            for dep in set(all_deps.get(v, [])):
+                if dep in in_degree and dep != v:
+                    adj[dep].append(v)
+                    in_degree[v] += 1
+        q = deque([v for v in view_map if in_degree[v] == 0])
+        sorted_views = []
+        while q:
+            v = q.popleft()
+            sorted_views.append(v)
+            for nxt in adj[v]:
+                in_degree[nxt] -= 1
+                if in_degree[nxt] == 0:
+                    q.append(nxt)
+        for v in view_map:
+            if v not in sorted_views:
+                sorted_views.append(v)
+
+        view_lines = [
+            "",
+            "-- ============================================================",
+            "-- 删除视图（先删父视图，再删子视图）",
+            "-- ============================================================",
+            "",
+        ]
+        for v in reversed(sorted_views):
+            view_lines.append(f"DROP VIEW IF EXISTS {v};")
+        view_lines.append("")
+        view_lines.append("-- ============================================================")
+        view_lines.append("-- 创建视图（先建子视图，再建父视图）")
+        view_lines.append("-- ============================================================")
+        view_lines.append("")
+        for v in sorted_views:
+            defn = view_map[v]
+            if not defn:
+                continue
+            clean_defn = re.sub(rf'\b{re.escape(schema)}\.', '', defn)
+            view_lines.append(f"CREATE OR REPLACE VIEW {v} AS")
+            view_lines.append(f"{clean_defn.strip().rstrip(';')};")
+            view_lines.append("")
+            view_lines.append("")
+
+        table_sql += '\n'.join(view_lines)
+
+    cur_views.close()
+    conn_views.close()
     files_map['01-table.sql'] = table_sql
 
     # 05-index.sql

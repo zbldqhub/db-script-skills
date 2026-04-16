@@ -1,6 +1,6 @@
 ---
 name: db-script-generator
-description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成标准化的全量 SQL 脚本（01-table ~ 11-cx_plugin、06-views、02-Procs 下的函数/存储过程/触发器）、增量更新脚本、数据库一致性检查报告以及自动修复脚本。支持单系统与多系统两种项目布局。Use when the user asks to generate SQL installation scripts, delta upgrade scripts, database consistency checks, auto-fixes for cx_fld / cx_entity metadata, schema changes (create/alter tables), or generating views/procedures/triggers.
+description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成标准化的全量 SQL 脚本（01-table ~ 11-cx_plugin）、增量更新脚本、数据库一致性检查报告以及自动修复脚本。支持单系统与多系统两种项目布局。Use when the user asks to generate SQL installation scripts, delta upgrade scripts, database consistency checks, auto-fixes for cx_fld / cx_entity metadata, or schema changes (create/alter tables).
 ---
 
 # 数据库脚本生成器
@@ -18,9 +18,8 @@ description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成
 | `align_sql_values.py` | 对 SQL 文件中的 INSERT 语句做中文显示宽度对齐 | 低 |
 | `check_db_consistency.py` | 输出数据库配置一致性检查报告 | 低 |
 | `fix_cx_fld.py` | 自动修复常见配置问题（默认 dry-run） | 低 |
-| `generate_views.py` | 从数据库生成视图脚本 `06-views.sql` | 低 |
-| `generate_procs.py` | 从数据库生成函数/存储过程脚本 `01-procs.sql` | 低 |
-| `generate_triggers.py` | 从数据库生成触发器脚本 `02-triggers.sql` | 低 |
+| `generate_procs.py` | 从数据库生成函数/存储过程脚本 `07-functions.sql` | 低 |
+| `generate_triggers.py` | 从数据库生成触发器脚本 `06-trigger.sql` | 低 |
 | `run_all.py` | 读取配置文件，一键串行生成多个子系统的全量脚本 | 低 |
 
 ---
@@ -164,48 +163,29 @@ python scripts/fix_cx_fld.py \
 
 ---
 
-### `generate_views.py`
+### `generate_procs.py`
 
-从数据库生成视图全量脚本，自动处理视图依赖顺序（基视图优先创建）。
+从数据库生成函数和存储过程全量脚本 `07-functions.sql`。
 
 ```bash
-python scripts/generate_views.py \
+python scripts/generate_procs.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
   --output-dir "<project-root>/01-Application" \
   --schema zgis
 ```
 
-输出文件：`06-views.sql`
-
----
-
-### `generate_procs.py`
-
-从数据库生成函数和存储过程全量脚本。
-
-```bash
-python scripts/generate_procs.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "<project-root>/02-Procs" \
-  --schema zgis
-```
-
-输出文件：`01-procs.sql`
-
 ---
 
 ### `generate_triggers.py`
 
-从数据库生成触发器全量脚本。
+从数据库生成触发器全量脚本 `06-trigger.sql`。
 
 ```bash
 python scripts/generate_triggers.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "<project-root>/02-Procs" \
+  --output-dir "<project-root>/01-Application" \
   --schema zgis
 ```
-
-输出文件：`02-triggers.sql`
 
 > **注意**：触发器通常依赖函数，因此建议先执行 `generate_procs.py`，再执行 `generate_triggers.py`。
 

@@ -94,7 +94,7 @@ def main():
     conn2.close()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(args.output_dir, '01-procs.sql')
+    output_path = os.path.join(args.output_dir, '07-functions.sql')
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
     print(f"Generated: {output_path} ({len(funcs)} functions, {len(procs)} procedures)")
