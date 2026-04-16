@@ -2,161 +2,212 @@
 
 一套面向 PostgreSQL 的数据库脚本编写与设计文档生成工具集，适用于遵循《数据库脚本规范 V1.2》的项目。全程支持单系统与多系统两种目录布局。
 
-## 包含内容
+## 架构分层
 
-本仓库整合了以下两部分官方 Skill，以及一个本地扩展脚本：
+本项目按 **Skill（能力）+ Workflow（流程）** 两层组织：
 
-| 目录 | 说明 |
-|------|------|
-| `db-script-generator/` | **数据库脚本生成器**：从 PostgreSQL 元数据生成全量安装脚本（`01-table` ~ `11-cx_plugin`）、增量升级脚本、数据库一致性检查报告及自动修复脚本。 |
-| `db-design-doc-generator/` | **数据库设计文档生成器**：根据 `cx_entity` / `cx_fld` / `cx_fldvalue` 元数据生成 Excel 表结构规格书和 SVG ER 图。 |
-| `local-script-extensions/` | **本地无库脚本同步扩展**：在不连接数据库的情况下，根据 JSON 变更配置直接修改全量脚本和增量脚本。 |
-
----
-
-## db-script-generator 快速开始
-
-### 1. 初始化目录
-
-```bash
-# 单系统
-python db-script-generator/scripts/init_project_dirs.py \
-  --project-root "./my-project" \
-  --layout single
-
-# 多系统
-python db-script-generator/scripts/init_project_dirs.py \
-  --project-root "./my-project" \
-  --layout multi \
-  --systems '["15-表务&抄表管理系统","18-收费管理系统"]'
-```
-
-### 2. 从已有数据库生成全量脚本
-
-```bash
-python db-script-generator/scripts/generate_db_scripts.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "./my-project/01-Application/15-表务&抄表管理系统" \
-  --schema zgis \
-  --sys 15 \
-  --major 41
-```
-
-### 3. 表结构变更（生成增量 + 同步更新全量）
-
-1. 编写 `changes.json` 描述变更（`create_table` / `add_column` / `add_fld` / `add_fldvalue` 等）。
-2. 执行到数据库（dry-run 预览）：
-   ```bash
-   python db-script-generator/scripts/sync_db_from_changes.py \
-     --db-url "postgresql://..." \
-     --schema zgis \
-     --changes changes.json \
-     --table-meta table_meta.json
-   ```
-3. 生成增量脚本：
-   ```bash
-   python db-script-generator/scripts/apply_schema_changes.py \
-     --db-url "postgresql://..." \
-     --project-root "./my-project" \
-     --author "你的名字" \
-     --changes changes.json
-   ```
-4. 重新生成该子系统的全量脚本（同步骤 2）。
-
-### 4. 格式化对齐已有 SQL
-
-```bash
-python db-script-generator/scripts/align_sql_values.py \
-  --input "./my-project/01-Application/02-cx_fld.sql"
-```
-
-更多细节请参考 [`db-script-generator/SKILL.md`](db-script-generator/SKILL.md)。
-
----
-
-## db-design-doc-generator 快速开始
-
-```bash
-# 生成 Excel 设计文档
-python db-design-doc-generator/scripts/generate_excel.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --schema zgis \
-  --output "./design.xlsx"
-
-# 生成 SVG ER 图
-python db-design-doc-generator/scripts/generate_er.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --schema zgis \
-  --output "./er_diagram.svg"
-```
-
-更多细节请参考 [`db-design-doc-generator/SKILL.md`](db-design-doc-generator/SKILL.md)。
-
----
-
-## local-script-extensions 本地无库扩展
-
-当你**不想连接数据库**，只想根据需求直接修改本地全量脚本和增量脚本时，使用此扩展。
-
-### 用法
-
-```bash
-python local-script-extensions/update_db_scripts.py \
-  --config local-script-extensions/changes_example.json
-```
-
-### 支持的变更类型
-
-| action | 作用 |
-|--------|------|
-| `add_columns` | 全量 `01-table.sql` 加字段 + 注释；增量生成 `ADD COLUMN` |
-| `drop_columns` | 全量 `01-table.sql` 删字段 + 注释；增量生成 `DROP COLUMN` |
-| `add_fld` | 全量 `02-cx_fld.sql` 加配置；增量生成 `delete + INSERT` |
-| `remove_fld` | 全量 `02-cx_fld.sql` 删配置；增量生成 `delete` |
-| `add_fldvalue` | 全量 `03-cx_fldvalue.sql` 加值域；增量生成 `delete + INSERT` |
-| `remove_fldvalue` | 全量 `03-cx_fldvalue.sql` 删值域；增量生成 `delete` |
-
-### 配置文件示例
-
-参见 [`local-script-extensions/changes_example.json`](local-script-extensions/changes_example.json)。
-
----
+- **Skill**：提供原子化的脚本工具，每个 Skill 专注做一类事情（生成脚本、生成文档、本地无库修改）。
+- **Workflow**：按实际业务场景编排多个 Skill/脚本，定义完整的执行步骤和决策分支。
 
 ## 目录结构
 
 ```
 db-script-skills/
 ├── README.md
-├── db-script-generator/
+├── db-script-generator/          # Skill：数据库脚本生成
 │   ├── SKILL.md
+│   ├── references/               # 规范与规则引用
+│   │   └── db-rules.md
 │   └── scripts/
-│       ├── align_sql_values.py
+│       ├── init_project_dirs.py
+│       ├── generate_db_scripts.py
 │       ├── apply_schema_changes.py
+│       ├── sync_db_from_changes.py
+│       ├── align_sql_values.py
 │       ├── check_db_consistency.py
 │       ├── fix_cx_fld.py
-│       ├── generate_db_scripts.py
-│       ├── init_project_dirs.py
-│       ├── run_all.py
-│       └── sync_db_from_changes.py
-├── db-design-doc-generator/
+│       ├── generate_views.py
+│       ├── generate_procs.py
+│       ├── generate_triggers.py
+│       └── run_all.py
+├── db-design-doc-generator/      # Skill：数据库设计文档生成与双向转换
 │   ├── SKILL.md
 │   └── scripts/
+│       ├── generate_excel.py
 │       ├── generate_er.py
-│       └── generate_excel.py
-└── local-script-extensions/
-    ├── update_db_scripts.py
-    └── changes_example.json
+│       ├── generate_excel_from_sql.py
+│       ├── generate_er_from_sql.py
+│       └── generate_sql_from_excel.py
+├── db-workflow-orchestrator/     # Skill：工作流编排器
+│   ├── SKILL.md
+│   └── references/
+│       ├── init-project.md
+│       ├── schema-change.md
+│       ├── generate-design-docs.md
+│       ├── generate-scripts-from-excel.md
+│       └── align-sql-files.md
+├── local-script-extensions/      # Skill：本地无库脚本同步
+│   ├── SKILL.md
+│   ├── changes_example.json
+│   └── update_db_scripts.py
+└── workflows/                    # Workflow：业务场景流程（源码参考）
+    ├── init-project.md
+    ├── schema-change.md
+    ├── generate-design-docs.md
+    ├── generate-scripts-from-excel.md
+    └── align-sql-files.md
 ```
+
+---
+
+## 快速开始（按 Workflow）
+
+### 场景1：从已有数据库初始化项目
+
+参见 [`workflows/init-project.md`](workflows/init-project.md)。
+
+核心调用：
+```bash
+# 1. 初始化目录
+python db-script-generator/scripts/init_project_dirs.py \
+  --project-root "./my-project" --layout single
+
+# 2. 生成全量脚本
+python db-script-generator/scripts/generate_db_scripts.py \
+  --db-url "postgresql://user:pass@host:port/dbname" \
+  --output-dir "./my-project/01-Application" \
+  --schema zgis --sys 0 --major 90
+
+# 3. 生成视图、函数/存储过程、触发器（可选）
+python db-script-generator/scripts/generate_views.py \
+  --db-url "postgresql://user:pass@host:port/dbname" \
+  --output-dir "./my-project/01-Application" \
+  --schema zgis
+
+python db-script-generator/scripts/generate_procs.py \
+  --db-url "postgresql://user:pass@host:port/dbname" \
+  --output-dir "./my-project/02-Procs" \
+  --schema zgis
+
+python db-script-generator/scripts/generate_triggers.py \
+  --db-url "postgresql://user:pass@host:port/dbname" \
+  --output-dir "./my-project/02-Procs" \
+  --schema zgis
+```
+
+### 场景2：表结构变更与新建表
+
+参见 [`workflows/schema-change.md`](workflows/schema-change.md)。
+
+核心调用链：
+1. `sync_db_from_changes.py`（dry-run → apply）
+2. `apply_schema_changes.py`（生成增量脚本）
+3. `generate_db_scripts.py`（重新生成全量脚本）
+4. `align_sql_values.py`（格式化对齐）
+
+> 如果不想连接数据库，直接使用 `local-script-extensions/update_db_scripts.py`。
+
+### 场景3：生成设计文档
+
+参见 [`workflows/generate-design-docs.md`](workflows/generate-design-docs.md)。
+
+支持两种数据来源：**数据库** 或 **全量 SQL 脚本目录**。
+
+```bash
+# 从数据库生成
+python db-design-doc-generator/scripts/generate_excel.py \
+  --db-url "postgresql://user:pass@host:port/dbname" \
+  --output-dir "./my-project/00-Design/01-Excel" \
+  --schema zgis
+
+# 从全量 SQL 脚本生成
+python db-design-doc-generator/scripts/generate_excel_from_sql.py \
+  --input-dir "./my-project/01-Application" \
+  --output-dir "./my-project/00-Design/01-Excel"
+```
+
+### 场景4：从 Excel 设计文档生成全量 SQL 脚本
+
+参见 [`workflows/generate-scripts-from-excel.md`](workflows/generate-scripts-from-excel.md)。
+
+```bash
+python db-design-doc-generator/scripts/generate_sql_from_excel.py \
+  --input "./design.xlsx" \
+  --output-dir "./my-project/01-Application" \
+  --sys "0"
+```
+
+### 场景5：批量格式化对齐已有 SQL 脚本
+
+参见 [`workflows/align-sql-files.md`](workflows/align-sql-files.md)。
+
+```bash
+# 单个文件
+python db-script-generator/scripts/align_sql_values.py \
+  --input "./my-project/01-Application/02-cx_fld.sql"
+
+# 批量整个目录（PowerShell）
+Get-ChildItem "./my-project/01-Application/*.sql" | ForEach-Object {
+    python db-script-generator/scripts/align_sql_values.py --input $_.FullName
+}
+```
+
+---
+
+## Skill 速查
+
+### db-script-generator
+
+| 脚本 | 用途 |
+|------|------|
+| `generate_db_scripts.py` | 从数据库生成全量 SQL 脚本 |
+| `apply_schema_changes.py` | 根据 JSON 变更生成增量升级脚本 |
+| `sync_db_from_changes.py` | 将变更同步到数据库（dry-run/apply） |
+| `align_sql_values.py` | 对 SQL INSERT 做中文宽度对齐 |
+| `check_db_consistency.py` | 数据库配置一致性检查 |
+| `fix_cx_fld.py` | 自动修复常见配置问题 |
+| `generate_views.py` | 从数据库生成视图脚本 |
+| `generate_procs.py` | 从数据库生成函数/存储过程脚本 |
+| `generate_triggers.py` | 从数据库生成触发器脚本 |
+| `init_project_dirs.py` | 初始化标准项目目录 |
+| `run_all.py` | 一键串行生成多个子系统全量脚本 |
+
+### db-design-doc-generator
+
+| 脚本 | 用途 | 方向 |
+|------|------|------|
+| `generate_excel.py` | 从 PostgreSQL 生成 Excel 表结构文档 | DB → Excel |
+| `generate_er.py` | 从 PostgreSQL 生成 SVG ER 图 | DB → ER |
+| `generate_excel_from_sql.py` | 从全量 SQL 脚本生成 Excel | SQL → Excel |
+| `generate_er_from_sql.py` | 从全量 SQL 脚本生成 SVG ER 图 | SQL → ER |
+| `generate_sql_from_excel.py` | 从 Excel 反向生成全量 SQL 脚本 | Excel → SQL |
+
+### db-workflow-orchestrator
+
+| 参考文档 | 覆盖场景 |
+|---------|---------|
+| `init-project.md` | 从已有数据库初始化项目 |
+| `schema-change.md` | 表结构变更与新建表 |
+| `generate-design-docs.md` | 生成设计文档（Excel + ER） |
+| `generate-scripts-from-excel.md` | 从 Excel 反向生成 SQL |
+| `align-sql-files.md` | 批量格式化对齐 SQL |
+
+> 本 Skill 用于编排上述多个 Skill 的完整业务流程。
+
+### local-script-extensions
+
+| 脚本 | 用途 |
+|------|------|
+| `update_db_scripts.py` | 不连数据库，直接根据 JSON 修改本地全量/增量脚本 |
 
 ---
 
 ## 环境要求
 
 - Python 3.10+
-- `psycopg2` 或 `psycopg2-binary`（db-script-generator / db-design-doc-generator 使用）
+- `psycopg2` 或 `psycopg2-binary`
 - `openpyxl`、`svglib` 等（设计文档生成器使用，详见各 SKILL.md）
-
----
+- `@mermaid-js/mermaid-cli`（ER 图生成使用，可选）
 
 ## License
 

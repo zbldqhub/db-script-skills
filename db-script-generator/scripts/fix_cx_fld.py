@@ -1,6 +1,19 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import psycopg2
 import argparse
 from datetime import datetime
+
+NUMERIC_TYPES = {
+    'integer', 'bigint', 'smallint', 'numeric', 'decimal', 'real',
+    'double precision', 'serial', 'bigserial', 'smallserial'
+}
+
+TIMESTAMP_TYPES = {
+    'timestamp without time zone', 'timestamp with time zone',
+    'timestamp', 'timestamptz'
+}
+
 
 def main():
     parser = argparse.ArgumentParser(description='Auto-fix common cx_fld issues. NEVER inserts id fields.')
@@ -33,7 +46,6 @@ def main():
     id_rows = cursor.fetchall()
     if id_rows:
         fixes.append("-- Remove forbidden 'id' configurations from cx_fld")
-        # group by tabname for clarity
         tabnames = sorted(set(r[0] for r in id_rows))
         for t in tabnames:
             fixes.append(f"DELETE FROM cx_fld WHERE tabname = '{t}' AND LOWER(colname) = 'id';")
@@ -79,6 +91,55 @@ def main():
             fixes.append(f"UPDATE cx_fld SET sys = '{target_sys}' WHERE tabname = '{tabname}';")
         fixes.append("")
 
+    # 5. Fix isnum mismatch
+    cursor.execute("""
+        SELECT c.table_name, c.column_name, c.data_type, f.isnum
+        FROM information_schema.columns c
+        JOIN cx_fld f ON c.table_name = f.tabname AND c.column_name = f.colname
+        WHERE c.table_schema = %s
+    """, (schema,))
+    isnum_fixes = []
+    for table_name, column_name, data_type, isnum in cursor.fetchall():
+        actual_type = data_type.lower()
+        is_numeric = actual_type in NUMERIC_TYPES
+        try:
+            isnum_val = int(isnum) if isnum is not None else 0
+        except (ValueError, TypeError):
+            isnum_val = 0
+        if isnum_val == 1 and not is_numeric:
+            isnum_fixes.append((table_name, column_name, 0))
+        elif isnum_val != 1 and is_numeric:
+            isnum_fixes.append((table_name, column_name, 1))
+
+    if isnum_fixes:
+        fixes.append("-- Fix isnum mismatch")
+        for tabname, colname, target in isnum_fixes:
+            fixes.append(f"UPDATE cx_fld SET isnum = {target} WHERE tabname = '{tabname}' AND colname = '{colname}';")
+        fixes.append("")
+
+    # 6. Fix timestamp fields disptype to 3 (when not 3 or 5)
+    cursor.execute("""
+        SELECT c.table_name, c.column_name, c.data_type, f.disptype
+        FROM information_schema.columns c
+        JOIN cx_fld f ON c.table_name = f.tabname AND c.column_name = f.colname
+        WHERE c.table_schema = %s
+          AND c.data_type IN ('timestamp without time zone', 'timestamp with time zone')
+    """, (schema,))
+    ts_fixes = []
+    for table_name, column_name, data_type, disptype in cursor.fetchall():
+        try:
+            disptype_val = int(disptype) if disptype is not None else -1
+        except (ValueError, TypeError):
+            disptype_val = -1
+        if disptype_val not in (3, 5):
+            ts_fixes.append((table_name, column_name))
+
+    if ts_fixes:
+        fixes.append("-- Fix timestamp fields disptype to 3 (default for timestamp)")
+        for tabname, colname in ts_fixes:
+            fixes.append(f"UPDATE cx_fld SET disptype = 3 WHERE tabname = '{tabname}' AND colname = '{colname}';")
+        fixes.append("")
+
     cursor.close()
 
     if not fixes:
@@ -118,6 +179,7 @@ def main():
         print("\n(Dry-run mode: no changes applied. Use --apply to execute.)")
 
     conn.close()
+
 
 if __name__ == '__main__':
     main()

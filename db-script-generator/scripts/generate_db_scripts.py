@@ -310,13 +310,6 @@ def build_table_sql(cursor, schema, table_list, entity_map, col_map, pk_map, uk_
                 comment = 'ID'
             lines.append(f"comment on column {tabname}.{colname} is '{comment.replace(chr(39), chr(39)+chr(39))}';")
 
-    # Views placeholder (manual maintenance required)
-    lines.append("")
-    lines.append("-- ============================================================")
-    lines.append("-- 创建视图（手动维护：先建子视图，再建父视图）")
-    lines.append("-- ============================================================")
-    lines.append("")
-
     return '\n'.join(lines) + '\n'
 
 def build_index_sql(index_map):
