@@ -7,53 +7,32 @@
 ## 需要收集的信息
 
 1. **项目根目录**（`project-root`）放在哪里？
-2. **单系统还是多系统？**
-   - 单系统：`01-Application/` 下直接生成脚本文件
-   - 多系统：`01-Application/<子系统名>/` 下分别生成脚本文件。需要列出各子系统的**名称**和对应的 **sys 码**
-3. **数据库连接 URL** 和 **schema 名**（默认 `zgis`）
-4. 需要按哪些 `major` 生成脚本？（如果用户不清楚，可传空，默认生成 `cx_entity.major > 0` 的所有表）
-5. `generate_db_scripts.py` 默认会生成 `01-table.sql`（含视图）~ `11-cx_plugin.sql` 全套脚本。若数据库中无对应数据，某些文件可能为空或不存在。
+2. **数据库连接 URL** 和 **schema 名**（默认 `zgis`）
+3. 需要按哪些 `major` 生成脚本？（如果用户不清楚，可传空，默认生成 `cx_entity.major > 0` 的所有表）
+4. `generate_db_scripts.py` 默认会生成 `01-table.sql`（含视图）~ `11-cx_plugin.sql` 全套脚本。若数据库中无对应数据，某些文件可能为空或不存在。
 
 ## 执行步骤
 
 ### 步骤1：初始化目录结构
 
 ```bash
-# 单系统
 python db-script-generator/scripts/init_project_dirs.py \
-  --project-root "<project-root>" \
-  --layout single
-
-# 多系统
-python db-script-generator/scripts/init_project_dirs.py \
-  --project-root "<project-root>" \
-  --layout multi \
-  --systems '["15-表务&抄表管理系统","18-收费管理系统"]'
+  --project-root "<project-root>"
 ```
 
 ### 步骤2：生成全量脚本
 
-**单系统：** 直接调用一次 `generate_db_scripts.py`
+直接调用 `generate_db_scripts.py`，指定 `major`：
 
 ```bash
 python db-script-generator/scripts/generate_db_scripts.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
   --output-dir "<project-root>/01-Application" \
   --schema zgis \
-  --sys 0 \
-  --major 90
-```
-
-**多系统：** 为每个子系统分别调用，指定各自的 `--sys`、`--major` 和 `--output-dir`
-
-```bash
-python db-script-generator/scripts/generate_db_scripts.py \
-  --db-url "postgresql://user:pass@host:port/dbname" \
-  --output-dir "<project-root>/01-Application/15-表务&抄表管理系统" \
-  --schema zgis \
-  --sys 15 \
   --major 41
 ```
+
+如果有多个 `major`，逐个执行或改用 `run_all.py`。
 
 `generate_db_scripts.py` 默认已包含 `09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql` 的生成。
 
@@ -90,5 +69,4 @@ Get-ChildItem "<project-root>/01-Application/*.sql" | ForEach-Object {
 
 ## 输出结果
 
-- 单系统：`01-Application/` 下包含 `01-table.sql`（含视图）~ `11-cx_plugin.sql`
-- 多系统：`01-Application/<子系统名>/` 下分别包含上述文件
+`01-Application/` 下包含 `01-table.sql`（含视图）~ `11-cx_plugin.sql`

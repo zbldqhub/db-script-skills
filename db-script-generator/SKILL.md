@@ -1,6 +1,6 @@
 ---
 name: db-script-generator
-description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成标准化的全量 SQL 脚本（01-table ~ 11-cx_plugin）、增量更新脚本、数据库一致性检查报告以及自动修复脚本。支持单系统与多系统两种项目布局。Use when the user asks to generate SQL installation scripts, delta upgrade scripts, database consistency checks, auto-fixes for cx_fld / cx_entity metadata, or schema changes (create/alter tables).
+description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成标准化的全量 SQL 脚本（01-table ~ 11-cx_plugin）、增量更新脚本、数据库一致性检查报告以及自动修复脚本。Use when the user asks to generate SQL installation scripts, delta upgrade scripts, database consistency checks, auto-fixes for cx_fld / cx_entity metadata, or schema changes (create/alter tables).
 ---
 
 # 数据库脚本生成器
@@ -26,23 +26,14 @@ description: 根据《数据库脚本规范V1.2》从 PostgreSQL 元数据生成
 
 ### `init_project_dirs.py`
 
-初始化标准目录结构，支持单系统和多系统布局。
+初始化标准项目目录（`00-Design` ~ `06-Temp`）。
 
 ```bash
-# 单系统
-python scripts/init_project_dirs.py --project-root "<path>" --layout single
-
-# 多系统
-python scripts/init_project_dirs.py \
-  --project-root "<path>" \
-  --layout multi \
-  --systems '["15-表务&抄表管理系统","18-收费管理系统"]'
+python scripts/init_project_dirs.py --project-root "<path>"
 ```
 
 **参数：**
 - `--project-root`：项目根目录
-- `--layout`：`single` 或 `multi`
-- `--systems`：多系统时传入 JSON 数组（子系统名称列表）
 
 ---
 
@@ -55,7 +46,6 @@ python scripts/generate_db_scripts.py \
   --db-url "postgresql://user:pass@host:port/dbname" \
   --output-dir "<project-root>/01-Application" \
   --schema zgis \
-  --sys 15 \
   --major 41
 ```
 
@@ -63,7 +53,6 @@ python scripts/generate_db_scripts.py \
 - `--db-url`：数据库连接 URL
 - `--output-dir`：脚本输出目录
 - `--schema`：目标 schema（默认 `zgis`）
-- `--sys`：子系统编码
 - `--major`：主类型码
 - `--with-config`：已弃用，保留该参数仅用于兼容性。`09-data.sql`、`10-cx_func.sql`、`11-cx_plugin.sql` 现在默认随全量脚本一起生成。
 
@@ -193,34 +182,19 @@ python scripts/generate_triggers.py \
 
 ### `run_all.py`
 
-一键串行生成多个子系统的全量脚本。读取配置文件执行。
+一键串行按主类型码生成全量脚本。读取配置文件执行。
 
 ```bash
 python scripts/run_all.py --config config.json
 ```
 
-**配置文件格式（多系统）：**
+**配置文件格式：**
 ```json
 {
   "db_url": "postgresql://user:pass@host:port/dbname",
   "schema": "zgis",
   "project_root": "/path/to/project",
-  "layout": "multi",
-  "systems": [
-    {"name": "15-表务&抄表管理系统", "sys": "15", "majors": [41, 42]},
-    {"name": "18-收费管理系统", "sys": "18", "majors": [47]}
-  ]
-}
-```
-
-**单系统兼容格式：**
-```json
-{
-  "db_url": "postgresql://user:pass@host:port/dbname",
-  "schema": "zgis",
-  "sys": "0",
-  "project_root": "/path/to/project",
-  "majors": [90]
+  "majors": [41, 42, 47]
 }
 ```
 

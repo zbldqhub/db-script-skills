@@ -38,9 +38,7 @@ description: Orchestrate end-to-end database development workflows for PostgreSQ
 
 ### 用户说"初始化项目"时的分支
 
-- **单系统** → `init_project_dirs.py --layout single`
-- **多系统** → `init_project_dirs.py --layout multi --systems '[...]'`
-- 随后按需生成视图、函数/存储过程、触发器
+直接调用 `init_project_dirs.py --project-root <path>` 生成标准目录，随后按需生成全量脚本、视图、函数/存储过程、触发器。
 
 ## 外部依赖
 

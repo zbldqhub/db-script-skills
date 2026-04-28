@@ -142,6 +142,10 @@ def align_sql_file(filepath):
 def quote_sql(val):
     if val is None:
         return 'null'
+    if isinstance(val, bool):
+        return 'TRUE' if val else 'FALSE'
+    if isinstance(val, (int, float)):
+        return str(val)
     s = str(val)
     if s.lower() == 'nan':
         return 'null'
@@ -362,6 +366,7 @@ def generate_config_sql(cursor, table_name, delete_clause_fn, sort_columns):
     cols = get_columns(cursor, table_name)
     if not cols:
         return None
+    cols_insert = [c for c in cols if c != 'id']
 
     cursor.execute(f"SELECT * FROM {table_name} ORDER BY {', '.join(sort_columns)}")
     rows = cursor.fetchall()
@@ -385,8 +390,8 @@ def generate_config_sql(cursor, table_name, delete_clause_fn, sort_columns):
     lines.append("")
 
     for row in rows:
-        vals = [quote_sql(v) for v in row]
-        lines.append(f"INSERT INTO {table_name}({', '.join(cols)}) VALUES ({', '.join(vals)});")
+        vals = [quote_sql(v) for i, v in enumerate(row) if cols[i] != 'id']
+        lines.append(f"INSERT INTO {table_name}({', '.join(cols_insert)}) VALUES ({', '.join(vals)});")
         lines.append("")
 
     return '\n'.join(lines) + '\n'
@@ -618,6 +623,7 @@ def main():
     cur3.execute(f"SELECT * FROM cx_entity WHERE name IN ({placeholders}) ORDER BY major, minor", tuple(table_list))
     full_entity_rows = cur3.fetchall()
     entity_cols = get_columns(cur3, 'cx_entity')
+    entity_cols_insert = [c for c in entity_cols if c != 'id']
     cur3.close()
     conn3.close()
 
@@ -627,8 +633,8 @@ def main():
         entity_lines.append(f"delete from cx_entity where major={maj};")
     entity_lines.append("")
     for row in full_entity_rows:
-        vals = [quote_sql(v) for v in row]
-        entity_lines.append(f"INSERT INTO cx_entity ({', '.join(entity_cols)}) VALUES ({', '.join(vals)});")
+        vals = [quote_sql(v) for i, v in enumerate(row) if entity_cols[i] != 'id']
+        entity_lines.append(f"INSERT INTO cx_entity ({', '.join(entity_cols_insert)}) VALUES ({', '.join(vals)});")
     files_map['04-cx_entity.sql'] = '\n'.join(entity_lines) + '\n'
 
     # 02-cx_fld.sql
@@ -646,9 +652,10 @@ def main():
         if fld_lines and fld_lines[-1].strip() != '':
             fld_lines.append('')
         fld_lines.append(f"delete from cx_fld where tabname='{tabname}';")
+        fld_cols_insert = [c for c in fld_cols if c != 'id']
         for row in rows:
-            vals = [quote_sql(v) for v in row]
-            fld_lines.append(f"INSERT INTO cx_fld ({', '.join(fld_cols)}) VALUES ({', '.join(vals)});")
+            vals = [quote_sql(v) for i, v in enumerate(row) if fld_cols[i] != 'id']
+            fld_lines.append(f"INSERT INTO cx_fld ({', '.join(fld_cols_insert)}) VALUES ({', '.join(vals)});")
     files_map['02-cx_fld.sql'] = '\n'.join(fld_lines) + '\n'
 
     # 03-cx_fldvalue.sql
@@ -671,8 +678,9 @@ def main():
             if prev_col is not None and prev_col != colname:
                 fldvalue_lines.append('')
             prev_col = colname
-            vals = [quote_sql(v) for v in row]
-            fldvalue_lines.append(f"INSERT INTO cx_fldvalue ({', '.join(fldvalue_cols)}) VALUES ({', '.join(vals)});")
+            fldvalue_cols_insert = [c for c in fldvalue_cols if c != 'id']
+            vals = [quote_sql(v) for i, v in enumerate(row) if fldvalue_cols[i] != 'id']
+            fldvalue_lines.append(f"INSERT INTO cx_fldvalue ({', '.join(fldvalue_cols_insert)}) VALUES ({', '.join(vals)});")
     files_map['03-cx_fldvalue.sql'] = '\n'.join(fldvalue_lines) + '\n'
 
     # 09-data.sql (system init data)
@@ -685,6 +693,7 @@ def main():
         if not cur4.fetchone():
             continue
         cols = get_columns(cur4, dt)
+        cols_insert = [c for c in cols if c != 'id']
         cur4.execute(f"SELECT * FROM {dt} ORDER BY 1")
         rows = cur4.fetchall()
         if not rows:
@@ -693,8 +702,8 @@ def main():
         data_lines.append(f"DELETE FROM {dt};")
         data_lines.append("")
         for row in rows:
-            vals = [quote_sql(v) for v in row]
-            data_lines.append(f"INSERT INTO {dt} ({', '.join(cols)}) VALUES ({', '.join(vals)});")
+            vals = [quote_sql(v) for i, v in enumerate(row) if cols[i] != 'id']
+            data_lines.append(f"INSERT INTO {dt} ({', '.join(cols_insert)}) VALUES ({', '.join(vals)});")
         data_lines.append("")
         data_lines.append("")
     cur4.close()
@@ -711,6 +720,7 @@ def main():
         func_rows = cur5.fetchall()
         if func_rows:
             func_cols = get_columns(cur5, 'cx_func')
+            func_cols_insert = [c for c in func_cols if c != 'id']
             func_lines = ["-- ============================================================", "-- 删除功能定义", "-- ============================================================"]
             sys_set = sorted(set(r[func_cols.index('sys')] if 'sys' in func_cols else r[1] for r in func_rows))
             for s in sys_set:
@@ -721,8 +731,8 @@ def main():
             func_lines.append("-- ============================================================")
             func_lines.append("")
             for row in func_rows:
-                vals = [quote_sql(v) for v in row]
-                func_lines.append(f"INSERT INTO cx_func({', '.join(func_cols)}) VALUES ({', '.join(vals)});")
+                vals = [quote_sql(v) for i, v in enumerate(row) if func_cols[i] != 'id']
+                func_lines.append(f"INSERT INTO cx_func({', '.join(func_cols_insert)}) VALUES ({', '.join(vals)});")
                 func_lines.append("")
             files_map['10-cx_func.sql'] = '\n'.join(func_lines) + '\n'
     cur5.close()
@@ -737,6 +747,7 @@ def main():
         plugin_rows = cur6.fetchall()
         if plugin_rows:
             plugin_cols = get_columns(cur6, 'cx_plugin')
+            plugin_cols_insert = [c for c in plugin_cols if c != 'id']
             plugin_lines = ["-- ============================================================", "-- 删除插件定义", "-- ============================================================"]
             sys_set = sorted(set(r[plugin_cols.index('sys')] if 'sys' in plugin_cols else r[1] for r in plugin_rows))
             for s in sys_set:
@@ -747,8 +758,8 @@ def main():
             plugin_lines.append("-- ============================================================")
             plugin_lines.append("")
             for row in plugin_rows:
-                vals = [quote_sql(v) for v in row]
-                plugin_lines.append(f"INSERT INTO cx_plugin({', '.join(plugin_cols)}) VALUES ({', '.join(vals)});")
+                vals = [quote_sql(v) for i, v in enumerate(row) if plugin_cols[i] != 'id']
+                plugin_lines.append(f"INSERT INTO cx_plugin({', '.join(plugin_cols_insert)}) VALUES ({', '.join(vals)});")
                 plugin_lines.append("")
             files_map['11-cx_plugin.sql'] = '\n'.join(plugin_lines) + '\n'
     cur6.close()

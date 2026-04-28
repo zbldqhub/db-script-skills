@@ -30,30 +30,18 @@ def main():
     schema = cfg.get('schema', 'zgis')
     project_root = cfg['project_root']
     major_map = cfg.get('major_map', {})
-    layout = cfg.get('layout', 'single')
-
-    # Normalize systems configuration (support both old flat majors and new systems array)
-    systems = cfg.get('systems', [])
-    if not systems and cfg.get('majors'):
-        systems = [{
-            'name': '',
-            'sys': cfg.get('sys', '0'),
-            'majors': cfg['majors']
-        }]
+    majors = cfg.get('majors', [])
 
     db_root = project_root
     er_dir = os.path.join(db_root, '00-Design')
-    check_dir = os.path.join(db_root, 'CheckReports')
+    check_dir = os.path.join(db_root, '00-Design', 'CheckReports')
 
     # 1. Init directories
     init_cmd = [
         sys.executable,
         os.path.join(SCRIPT_DIR, 'init_project_dirs.py'),
-        '--project-root', db_root,
-        '--layout', layout
+        '--project-root', db_root
     ]
-    if layout == 'multi' and systems:
-        init_cmd += ['--systems', json.dumps([s['name'] for s in systems])]
     run_cmd(init_cmd, "Initializing project directories")
 
     os.makedirs(check_dir, exist_ok=True)
@@ -77,23 +65,18 @@ def main():
 
     major_map_args = ['--major-map', major_map_path] if major_map_path else []
 
-    # 3. Generate SQL scripts per system / major
-    for system in systems:
-        sys_name = system.get('name', '')
-        sys_num = system.get('sys', '0')
-        sys_majors = system.get('majors', [])
-        sql_dir = os.path.join(db_root, '01-Application', sys_name) if sys_name else os.path.join(db_root, '01-Application')
-        os.makedirs(sql_dir, exist_ok=True)
-        for major in sys_majors:
-            run_cmd([
-                sys.executable,
-                os.path.join(SCRIPT_DIR, 'generate_db_scripts.py'),
-                '--db-url', db_url,
-                '--output-dir', sql_dir,
-                '--schema', schema,
-                '--sys', str(sys_num),
-                '--major', str(major)
-            ], f"Generating SQL scripts for system={sys_name or 'default'}, major={major}")
+    # 3. Generate SQL scripts per major
+    sql_dir = os.path.join(db_root, '01-Application')
+    os.makedirs(sql_dir, exist_ok=True)
+    for major in majors:
+        run_cmd([
+            sys.executable,
+            os.path.join(SCRIPT_DIR, 'generate_db_scripts.py'),
+            '--db-url', db_url,
+            '--output-dir', sql_dir,
+            '--schema', schema,
+            '--major', str(major)
+        ], f"Generating SQL scripts for major={major}")
 
     # 4. Generate Excel (optional)
     excel_out = cfg.get('excel_dir', os.path.join(db_root, '00-Design', '01-Excel'))

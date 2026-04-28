@@ -14,6 +14,8 @@ import argparse
 import json
 import os
 import re
+import subprocess
+import sys
 from datetime import datetime
 
 # -----------------------------------------------------------
@@ -21,9 +23,9 @@ from datetime import datetime
 # -----------------------------------------------------------
 DEFAULT_FLD_TEMPLATE = (
     "INSERT INTO cx_fld (sys, tabname, colname, namec, disptype, isnum, disporder, "
-    "newedit, editable, nullable, defval, qrylevel, grasyn, params, memo, bzfld, ismcard, iu, description) "
+    "newedit, editable, nullable, defval, qrylevel, grasyn, params, memo, bzfld, ismcard, iu, description, ms) "
     "VALUES ('{sys}', '{tabname}', '{colname}', '{namec}', {disptype}, {isnum}, {disporder}, "
-    "{newedit}, {editable}, {nullable}, null, {qrylevel}, null, null, null, 0, 0, 0, null);"
+    "{newedit}, {editable}, {nullable}, null, {qrylevel}, null, null, null, 0, 0, 0, null, null);"
 )
 
 DEFAULT_FLDVALUE_TEMPLATE = (
@@ -75,7 +77,8 @@ def _find_table_block(lines, table):
     """返回 (start_idx, end_idx, base_indent)"""
     start_idx = None
     for i, line in enumerate(lines):
-        if re.match(rf'^\s*create\s+table\s+{re.escape(table)}\s*\(', line, re.IGNORECASE):
+        # 支持 create table xxx ( 或 create table xxx\n(
+        if re.match(rf'^\s*create\s+table\s+{re.escape(table)}\b', line, re.IGNORECASE):
             start_idx = i
             break
     if start_idx is None:
@@ -287,6 +290,12 @@ def modify_config_sql(content, table_name, config_type, changes_list):
     # 收集该块内已有的 INSERT 行
     insert_lines = lines[delete_line_idx + 1:block_end]
 
+    # 记录原始末尾是否有空行（块间间隔）
+    had_trailing_blank = False
+    while insert_lines and insert_lines[-1].strip() == '':
+        insert_lines.pop()
+        had_trailing_blank = True
+
     for ch in changes_list:
         action = ch['action']
         if action == f'remove_{config_type}':
@@ -297,6 +306,10 @@ def modify_config_sql(content, table_name, config_type, changes_list):
             ]
         elif action == f'add_{config_type}':
             insert_lines.extend(_generate_config_inserts(config_type, ch))
+
+    # 恢复块间空行（不同表配置块之间保留一个空行）
+    if had_trailing_blank:
+        insert_lines.append('')
 
     new_block = lines[:delete_line_idx + 1] + insert_lines + lines[block_end:]
     return '\n'.join(new_block)
@@ -438,13 +451,13 @@ def main():
         cfg = json.load(f)
 
     project_root = cfg.get('project_root', '.')
-    system = cfg['system']
-    target_upgrade = cfg.get('target_upgrade', '02-Upgrade/update2026.sql')
+    system = cfg.get('system', '')
+    target_upgrade = cfg.get('target_upgrade', '03-Upgrade/update2026.sql')
     author = cfg.get('author', '')
     comment = cfg.get('comment', '')
     changes = cfg['changes']
 
-    app_dir = os.path.join(project_root, '01-Application', system)
+    app_dir = os.path.join(project_root, '01-Application', system) if system else os.path.join(project_root, '01-Application')
     table_sql_path = os.path.join(app_dir, '01-table.sql')
     fld_sql_path = os.path.join(app_dir, '02-cx_fld.sql')
     fldvalue_sql_path = os.path.join(app_dir, '03-cx_fldvalue.sql')
@@ -513,6 +526,18 @@ def main():
     with open(upgrade_path, 'a', encoding='utf-8') as f:
         f.write(upgrade_block)
     print(f"[OK] 已追加增量脚本到 {upgrade_path}")
+
+    # 6. 格式化对齐
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    align_script = os.path.join(os.path.dirname(script_dir), 'db-script-generator', 'scripts', 'align_sql_values.py')
+    if os.path.exists(align_script):
+        for sql_path in (table_sql_path, fld_sql_path, fldvalue_sql_path, entity_sql_path):
+            if os.path.exists(sql_path):
+                result = subprocess.run([sys.executable, align_script, '--input', sql_path], capture_output=True, text=True)
+                if result.returncode == 0:
+                    print(f"[OK] 已对齐 {sql_path}")
+                else:
+                    print(f"[WARN] 对齐失败 {sql_path}: {result.stderr}")
 
 if __name__ == '__main__':
     main()

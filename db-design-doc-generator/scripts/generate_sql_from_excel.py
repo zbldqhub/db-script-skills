@@ -8,6 +8,8 @@ import os
 import re
 import json
 import argparse
+import subprocess
+import sys
 import openpyxl
 
 HEADERS = [
@@ -444,6 +446,19 @@ def main():
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
         print(f"Generated: {path}")
+
+    # 格式化对齐
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    align_script = os.path.join(os.path.dirname(os.path.dirname(script_dir)), 'db-script-generator', 'scripts', 'align_sql_values.py')
+    if os.path.exists(align_script):
+        for fname in ('02-cx_fld.sql', '03-cx_fldvalue.sql', '04-cx_entity.sql'):
+            path = os.path.join(output_dir, fname)
+            if os.path.exists(path):
+                result = subprocess.run([sys.executable, align_script, '--input', path], capture_output=True, text=True)
+                if result.returncode == 0:
+                    print(f"[OK] Aligned {path}")
+                else:
+                    print(f"[WARN] Align failed {path}: {result.stderr}")
 
     print("Done.")
 

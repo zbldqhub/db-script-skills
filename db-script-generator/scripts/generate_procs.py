@@ -45,8 +45,8 @@ def main():
     lines.append("-- 删除函数")
     lines.append("-- ============================================================")
     lines.append("")
-    for name, args, _ in funcs:
-        lines.append(f"DROP FUNCTION IF EXISTS {name}({args});")
+    for name, fargs, _ in funcs:
+        lines.append(f"DROP FUNCTION IF EXISTS {name}({fargs});")
     if funcs:
         lines.append("")
 
@@ -55,8 +55,8 @@ def main():
         lines.append("-- 删除存储过程")
         lines.append("-- ============================================================")
         lines.append("")
-        for name, args, _ in procs:
-            lines.append(f"DROP PROCEDURE IF EXISTS {name}({args});")
+        for name, fargs, _ in procs:
+            lines.append(f"DROP PROCEDURE IF EXISTS {name}({fargs});")
         lines.append("")
 
     lines.append("-- ============================================================")
@@ -67,7 +67,7 @@ def main():
     conn2 = psycopg2.connect(args.db_url)
     cur2 = conn2.cursor()
 
-    for name, args, kind in funcs:
+    for name, fargs, kind in funcs:
         cur2.execute("SELECT pg_get_functiondef(oid) FROM pg_proc WHERE proname = %s AND prokind = 'f' LIMIT 1", (name,))
         defn = cur2.fetchone()[0]
         clean_defn = re.sub(rf'\b{re.escape(schema)}\.', '', defn)
@@ -81,7 +81,7 @@ def main():
         lines.append("-- 创建存储过程")
         lines.append("-- ============================================================")
         lines.append("")
-        for name, args, kind in procs:
+        for name, fargs, kind in procs:
             cur2.execute("SELECT pg_get_functiondef(oid) FROM pg_proc WHERE proname = %s AND prokind = 'p' LIMIT 1", (name,))
             defn = cur2.fetchone()[0]
             clean_defn = re.sub(rf'\b{re.escape(schema)}\.', '', defn)
